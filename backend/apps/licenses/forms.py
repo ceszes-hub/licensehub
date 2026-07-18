@@ -2,14 +2,13 @@ from typing import Any
 
 from django import forms
 from django.forms import inlineformset_factory
-from .crypto import encrypt_secret
 from .models import License, LicenseDocument, Party, PartyContact
 
 
 class LicenseForm(forms.ModelForm):
     license_reference = forms.CharField(
         required=False,
-        widget=forms.PasswordInput(render_value=False),
+        widget=forms.TextInput(),
         label="Licenckulcs vagy szerződésszám",
     )
     notification_intervals_text = forms.CharField(
@@ -61,6 +60,7 @@ class LicenseForm(forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.instance.pk:
+            self.fields["license_reference"].initial = self.instance.secret_reference
             self.fields["notification_intervals_text"].initial = ",".join(
                 map(str, self.instance.notification_intervals)
             )
@@ -94,7 +94,7 @@ class LicenseForm(forms.ModelForm):
         obj.notification_intervals = self.cleaned_data["notification_intervals_text"]
         obj.notification_emails = self.cleaned_data["notification_emails_text"]
         if self.cleaned_data.get("license_reference"):
-            obj.secret_reference = encrypt_secret(self.cleaned_data["license_reference"])
+            obj.secret_reference = self.cleaned_data["license_reference"]
         if commit:
             obj.save()
             self.save_m2m()
@@ -104,7 +104,7 @@ class LicenseForm(forms.ModelForm):
 class DocumentForm(forms.ModelForm):
     class Meta:
         model = LicenseDocument
-        fields = ["file"]
+        fields = ["document_type", "file"]
 
     def clean_file(self):
         f = self.cleaned_data["file"]

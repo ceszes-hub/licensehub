@@ -145,7 +145,17 @@ class License(models.Model):
 
 
 class LicenseDocument(models.Model):
+    class DocumentType(models.TextChoices):
+        LICENSE_FILE = "LICENSE_FILE", "Licencfájl"
+        CONTRACT = "CONTRACT", "Szerződés"
+        INVOICE = "INVOICE", "Számla"
+        INSTALLATION_GUIDE = "INSTALLATION_GUIDE", "Telepítési útmutató"
+        OTHER = "OTHER", "Egyéb"
+
     license = models.ForeignKey(License, related_name="documents", on_delete=models.CASCADE)
+    document_type = models.CharField(
+        max_length=30, choices=DocumentType.choices, default=DocumentType.OTHER
+    )
     file = models.FileField(upload_to="licenses/%Y/%m/")
     original_name = models.CharField(max_length=255)
     uploaded_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL)

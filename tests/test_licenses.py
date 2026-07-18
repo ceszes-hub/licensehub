@@ -2,11 +2,17 @@ from datetime import timedelta
 import pytest
 from django.contrib.auth import get_user_model
 from django.core import mail
+from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from apps.core.models import SystemConfiguration
-from apps.licenses.crypto import decrypt_secret
-from apps.licenses.models import License, NotificationLog, Party, PartyContact
+from apps.licenses.models import (
+    License,
+    LicenseDocument,
+    NotificationLog,
+    Party,
+    PartyContact,
+)
 from apps.licenses.tasks import send_expiry_notifications
 
 pytestmark = pytest.mark.django_db
@@ -42,14 +48,31 @@ def license_data():
     }
 
 
-def test_license_crud_encrypts_secret(client, admin):
+def test_license_crud_keeps_reference_visible(client, admin):
     response = client.post("/licenses/new/", license_data())
     assert response.status_code == 302
     obj = License.objects.get()
-    assert "SECRET-123" not in obj.secret_reference
-    assert decrypt_secret(obj.secret_reference) == "SECRET-123"
+    assert obj.secret_reference == "SECRET-123"
     assert client.get(f"/licenses/{obj.pk}/").status_code == 200
     assert client.get("/licenses/export.csv").status_code == 200
+
+
+def test_license_document_upload_and_delete(client, admin, settings, tmp_path):
+    settings.MEDIA_ROOT = tmp_path
+    data = license_data()
+    data["document_type"] = LicenseDocument.DocumentType.INSTALLATION_GUIDE
+    data["documents"] = SimpleUploadedFile(
+        "telepitesi-utmutato.pdf", b"example pdf content", content_type="application/pdf"
+    )
+    response = client.post("/licenses/new/", data)
+    assert response.status_code == 302
+    document = LicenseDocument.objects.get()
+    assert document.document_type == LicenseDocument.DocumentType.INSTALLATION_GUIDE
+    assert document.file.storage.exists(document.file.name)
+    response = client.post(f"/licenses/{document.license_id}/documents/{document.pk}/delete/")
+    assert response.status_code == 302
+    assert not LicenseDocument.objects.exists()
+    assert not document.file.storage.exists(document.file.name)
 
 
 def test_concurrent_limit_validation():
@@ -156,8 +179,10 @@ def test_management_pages(client, admin, settings, tmp_path):
         == 302
     )
     assert client.get("/licenses/manufacturers/").status_code == 200
+    manufacturer = Party.objects.get(kind=Party.Kind.MANUFACTURER)
+    assert client.get(f"/licenses/manufacturers/{manufacturer.pk}/edit/").status_code == 200
     assert client.get("/licenses/distributors/").status_code == 200
-    assert client.get("/licenses/documents/").status_code == 200
+    assert client.get("/licenses/documents/").status_code == 404
     assert client.get("/licenses/reports/").status_code == 200
     assert client.get("/audit/").status_code == 200
     assert client.get("/users/").status_code == 200
