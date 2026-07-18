@@ -1,1 +1,2 @@
-{% extends 'base.html' %}{% block content %}<div class="row justify-content-center"><div class="col-md-5"><div class="card shadow-sm"><div class="card-body"><h1 class="h3">Bejelentkez?s</h1><form method="post">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary w-100">Bejelentkez?s</button></form></div></div></div></div>{% endblock %}
+{% extends 'base.html' %}
+{% block content %}<div class="row justify-content-center"><div class="col-md-5"><div class="card shadow-sm"><div class="card-body"><h1 class="h3">Bejelentkezés</h1><form method="post">{% csrf_token %}{{ form.as_p }}<button class="btn btn-primary w-100">Bejelentkezés</button></form></div></div></div></div>{% endblock %}

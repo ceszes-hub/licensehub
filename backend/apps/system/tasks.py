@@ -1,7 +1,10 @@
+from datetime import datetime, timezone
 from celery import shared_task
-from .views import checks
+from django.core.cache import cache
 
 
 @shared_task
 def periodic_health_check():
-    return checks()
+    timestamp = datetime.now(timezone.utc).timestamp()
+    cache.set("celery_beat_heartbeat", timestamp, timeout=180)
+    return {"status": "healthy", "timestamp": timestamp}

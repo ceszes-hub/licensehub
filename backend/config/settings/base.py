@@ -97,3 +97,11 @@ SESSION_COOKIE_AGE = env.int("SESSION_COOKIE_AGE", default=3600)
 SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 LOGIN_MAX_ATTEMPTS = env.int("LOGIN_MAX_ATTEMPTS", default=5)
 LOGIN_LOCKOUT_SECONDS = env.int("LOGIN_LOCKOUT_SECONDS", default=900)
+
+TLS_MONITOR_CERT_PATH = Path(env("TLS_MONITOR_CERT_PATH", default="/tls/fullchain.pem"))
+CELERY_BEAT_SCHEDULE = {
+    "licensehub-health-heartbeat": {
+        "task": "apps.system.tasks.periodic_health_check",
+        "schedule": 60.0,
+    }
+}

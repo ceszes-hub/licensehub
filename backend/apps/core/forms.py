@@ -3,8 +3,8 @@ from django.contrib.auth import get_user_model, password_validation
 
 
 class OrganizationForm(forms.Form):
-    company_name = forms.CharField(max_length=200, label="C?gn?v")
-    company_short_name = forms.CharField(max_length=50, label="R?vid n?v")
+    company_name = forms.CharField(max_length=200, label="Cégnév")
+    company_short_name = forms.CharField(max_length=50, label="Rövid név")
     country = forms.CharField(max_length=2, initial="HU")
     timezone = forms.CharField(initial="Europe/Budapest")
     language = forms.CharField(initial="hu")

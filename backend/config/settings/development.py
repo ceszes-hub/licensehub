@@ -10,3 +10,5 @@ SECURE_SSL_REDIRECT = False
 STATIC_ROOT = BASE_DIR / "staticfiles"
 MEDIA_ROOT = BASE_DIR / "media"
 BACKUP_PATH = BASE_DIR / "backups"
+
+TLS_MONITOR_CERT_PATH = BASE_DIR / "tests" / "missing-cert.pem"

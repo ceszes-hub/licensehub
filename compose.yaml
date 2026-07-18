@@ -44,6 +44,11 @@ services:
     networks:
       - frontend
       - internal
+    volumes:
+      - static:/app/staticfiles
+      - media:/app/media
+      - backups:/backups
+      - ./docker/nginx/certs:/tls:ro
     command:
       - /app/entrypoint.sh
     healthcheck:
