@@ -1,8 +1,10 @@
 from datetime import timedelta
+from io import StringIO
 import pytest
 from django.contrib.auth import get_user_model
 from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.core.exceptions import ValidationError
 from django.utils import timezone
 from apps.core.models import SystemConfiguration
@@ -14,6 +16,9 @@ from apps.licenses.models import (
     PartyContact,
 )
 from apps.licenses.tasks import send_expiry_notifications
+from apps.licenses.crypto import decrypt_secret
+from apps.system.forms import BackupSettingsForm, NetworkSettingsForm
+from apps.system.models import IntegrationSettings
 
 pytestmark = pytest.mark.django_db
 
@@ -187,7 +192,75 @@ def test_management_pages(client, admin, settings, tmp_path):
     assert client.get("/audit/").status_code == 200
     assert client.get("/users/").status_code == 200
     assert client.get("/settings/").status_code == 200
+    assert client.get("/settings/network/").status_code == 200
     assert client.get("/settings/ldap/").status_code == 200
     assert client.get("/settings/smtp/").status_code == 200
     assert client.post("/backup/", {"backup_now": "1"}).status_code == 302
     assert (tmp_path / ".backup-request").exists()
+
+
+def test_backup_smb_settings_form_and_gui(client, admin, settings, tmp_path):
+    settings.BACKUP_PATH = tmp_path
+    data = {
+        "backup_retention_days": 30,
+        "backup_interval_hours": 12,
+        "backup_destination": "SMB",
+        "backup_local_subdirectory": "production",
+        "backup_remote_path": "",
+        "backup_smb_host": "192.168.0.50",
+        "backup_smb_port": 445,
+        "backup_smb_share": "Backups",
+        "backup_smb_subdirectory": "LicenseHub",
+        "backup_smb_domain": "LAUREL",
+        "backup_smb_username": "licensebackup",
+        "smb_password_input": "Strong-SMB-Password!",
+        "save_settings": "1",
+    }
+    response = client.post("/backup/", data)
+    assert response.status_code == 302
+    config = IntegrationSettings.get_solo()
+    assert config.backup_destination == "SMB"
+    assert decrypt_secret(config.backup_smb_password) == "Strong-SMB-Password!"
+    assert (tmp_path / ".rclone-runtime" / "host").read_text() == "192.168.0.50"
+    assert (tmp_path / ".rclone-runtime" / "password").read_text() == "Strong-SMB-Password!"
+
+    invalid = data | {"backup_smb_host": "", "backup_retention_days": 0}
+    form = BackupSettingsForm(invalid, instance=config)
+    assert not form.is_valid()
+    assert "backup_smb_host" in form.errors
+    assert "backup_retention_days" in form.errors
+
+
+def test_network_settings_and_netplan_export(client, admin):
+    data = {
+        "network_hostname": "licensehub.example.local",
+        "network_interface": "ens18",
+        "network_address": "192.168.0.69/24",
+        "network_gateway": "192.168.0.1",
+        "network_dns_primary": "192.168.0.1",
+        "network_dns_secondary": "1.1.1.1",
+        "network_search_domain": "example.local",
+        "network_public_url": "https://licensehub.example.local",
+    }
+    response = client.post("/settings/network/", data)
+    assert response.status_code == 302
+    output = StringIO()
+    call_command("export_network_config", stdout=output)
+    rendered = output.getvalue()
+    assert "ens18:" in rendered
+    assert "192.168.0.69/24" in rendered
+    assert "via: 192.168.0.1" in rendered
+    hostname = StringIO()
+    call_command("export_network_hostname", stdout=hostname)
+    assert hostname.getvalue().strip() == "licensehub.example.local"
+
+    invalid = NetworkSettingsForm(data | {"network_address": "invalid"})
+    assert not invalid.is_valid()
+    assert "network_address" in invalid.errors
+
+    config = IntegrationSettings.get_solo()
+    config.network_dhcp = True
+    config.save()
+    output = StringIO()
+    call_command("export_network_config", stdout=output)
+    assert "dhcp4: true" in output.getvalue()

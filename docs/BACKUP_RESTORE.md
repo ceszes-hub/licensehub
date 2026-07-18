@@ -51,3 +51,16 @@ bash scripts/restore.sh licensehub_full_YYYYMMDDTHHMMSSZ.tar.gz
 ```
 
 The script verifies both checksum layers, stops application services, replaces the database and uploaded media, restores local configuration, rebuilds containers, runs migrations and static collection, then starts the complete stack. It requires typing `RESTORE` before destructive operations.
+## SMB network share
+
+Select **SMB network share** under Settings → Backup and enter the server/IP, port 445, share, optional subdirectory/domain, username and password. The password is encrypted in PostgreSQL. The backup container creates a temporary rclone configuration only while the backup runs. Use a dedicated SMB 3 account restricted to the LicenseHub backup directory.
+
+## Network configuration
+
+Configure DHCP or a static address under Settings → Network. Apply the generated Netplan configuration from the Ubuntu console:
+
+```sh
+sudo bash scripts/apply-network-config.sh
+```
+
+`netplan try` rolls the change back after 120 seconds unless it is confirmed. Existing files are copied to `/var/backups/licensehub-netplan/` before applying the change.

@@ -1,3 +1,5 @@
+import ipaddress
+
 from django import forms
 from apps.core.models import SystemConfiguration
 from apps.licenses.crypto import encrypt_secret
@@ -97,6 +99,10 @@ class SMTPSettingsForm(forms.ModelForm):
 
 
 class BackupSettingsForm(forms.ModelForm):
+    smb_password_input = forms.CharField(
+        required=False, widget=forms.PasswordInput, label="SMB jelszó"
+    )
+
     class Meta:
         model = IntegrationSettings
         fields = [
@@ -105,6 +111,12 @@ class BackupSettingsForm(forms.ModelForm):
             "backup_destination",
             "backup_local_subdirectory",
             "backup_remote_path",
+            "backup_smb_host",
+            "backup_smb_port",
+            "backup_smb_share",
+            "backup_smb_subdirectory",
+            "backup_smb_domain",
+            "backup_smb_username",
         ]
         labels = {
             "backup_retention_days": "Megőrzési idő (nap)",
@@ -112,10 +124,12 @@ class BackupSettingsForm(forms.ModelForm):
             "backup_destination": "Mentés célja",
             "backup_local_subdirectory": "Helyi alkönyvtár",
             "backup_remote_path": "Felhős rclone célútvonal",
-        }
-        help_texts = {
-            "backup_local_subdirectory": "A /backups könyvtáron belüli név, például full.",
-            "backup_remote_path": "Például amazon:licensehub, azure:backup vagy sharepoint:LicenseHub.",
+            "backup_smb_host": "SMB szerver vagy IP-cím",
+            "backup_smb_port": "SMB port",
+            "backup_smb_share": "Megosztás neve",
+            "backup_smb_subdirectory": "SMB alkönyvtár",
+            "backup_smb_domain": "Tartomány",
+            "backup_smb_username": "SMB felhasználónév",
         }
 
     def clean_backup_retention_days(self):
@@ -133,8 +147,82 @@ class BackupSettingsForm(forms.ModelForm):
     def clean(self):
         cleaned = super().clean()
         destination = cleaned.get("backup_destination")
-        if destination != IntegrationSettings.BackupDestination.LOCAL and not cleaned.get(
+        if destination == IntegrationSettings.BackupDestination.SMB:
+            for field in ("backup_smb_host", "backup_smb_share", "backup_smb_username"):
+                if not cleaned.get(field):
+                    self.add_error(field, "SMB mentésnél ez a mező kötelező.")
+        elif destination != IntegrationSettings.BackupDestination.LOCAL and not cleaned.get(
             "backup_remote_path"
         ):
             self.add_error("backup_remote_path", "Felhős mentésnél a célútvonal kötelező.")
+        return cleaned
+
+    def save(self, commit=True):
+        obj = super().save(False)
+        if self.cleaned_data.get("smb_password_input"):
+            obj.backup_smb_password = encrypt_secret(self.cleaned_data["smb_password_input"])
+        if commit:
+            obj.save()
+        return obj
+
+
+class NetworkSettingsForm(forms.ModelForm):
+    class Meta:
+        model = IntegrationSettings
+        fields = [
+            "network_hostname",
+            "network_interface",
+            "network_dhcp",
+            "network_address",
+            "network_gateway",
+            "network_dns_primary",
+            "network_dns_secondary",
+            "network_search_domain",
+            "network_public_url",
+        ]
+        labels = {
+            "network_hostname": "Gépnév",
+            "network_interface": "Hálózati interfész",
+            "network_dhcp": "DHCP használata",
+            "network_address": "IP-cím/prefix",
+            "network_gateway": "Alapértelmezett átjáró",
+            "network_dns_primary": "Elsődleges DNS",
+            "network_dns_secondary": "Másodlagos DNS",
+            "network_search_domain": "Keresési tartomány",
+            "network_public_url": "LicenseHub publikus URL",
+        }
+
+    def clean_network_hostname(self):
+        value = self.cleaned_data["network_hostname"].strip().lower()
+        labels = value.split(".") if value else []
+        if value and any(
+            not label
+            or len(label) > 63
+            or label.startswith("-")
+            or label.endswith("-")
+            or not label.replace("-", "").isalnum()
+            for label in labels
+        ):
+            raise forms.ValidationError("Érvénytelen gépnév.")
+        return value
+
+    def clean_network_interface(self):
+        value = self.cleaned_data["network_interface"]
+        if not value.replace("-", "").replace("_", "").isalnum():
+            raise forms.ValidationError("Érvénytelen interfésznév.")
+        return value
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get("network_dhcp"):
+            address = cleaned.get("network_address")
+            if not address:
+                self.add_error("network_address", "Statikus beállításnál kötelező.")
+            else:
+                try:
+                    ipaddress.ip_interface(address)
+                except ValueError:
+                    self.add_error("network_address", "Érvénytelen IP-cím vagy prefix.")
+            if not cleaned.get("network_gateway"):
+                self.add_error("network_gateway", "Statikus beállításnál kötelező.")
         return cleaned

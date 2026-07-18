@@ -31,6 +31,27 @@ run_backup() {
     stamp=$(date -u +%Y%m%dT%H%M%SZ)
     name="licensehub_full_${stamp}"
     workdir=$(mktemp -d)
+    rclone_config="/root/.config/rclone/rclone.conf"
+    if [ "$destination" = "SMB" ]; then
+        runtime="$backup_root/.rclone-runtime"
+        for field in host port share username password; do
+            [ -f "$runtime/$field" ] || { echo "Missing SMB runtime setting: $field" >&2; exit 5; }
+        done
+        smb_password=$(rclone obscure "$(cat "$runtime/password")")
+        cat > "$workdir/rclone.conf" <<EOF
+[licensehub-smb]
+type = smb
+host = $(cat "$runtime/host")
+port = $(cat "$runtime/port")
+user = $(cat "$runtime/username")
+pass = $smb_password
+domain = $(cat "$runtime/domain")
+EOF
+        rclone_config="$workdir/rclone.conf"
+        remote_path="licensehub-smb:$(cat "$runtime/share")"
+        smb_subdirectory=$(cat "$runtime/subdirectory")
+        [ -z "$smb_subdirectory" ] || remote_path="$remote_path/$smb_subdirectory"
+    fi
     trap 'rm -rf "$workdir"' EXIT INT TERM
 
     PGPASSWORD="$POSTGRES_PASSWORD" pg_dump \
@@ -63,9 +84,9 @@ run_backup() {
     find "$backup_root" -name 'licensehub_full_*.tar.gz*' -mtime "+$retention_days" -delete
     if [ "$destination" != "LOCAL" ]; then
         [ -n "$remote_path" ] || { echo "Cloud destination is selected but remote path is empty." >&2; exit 4; }
-        rclone copyto "$bundle" "$remote_path/${name}.tar.gz"
-        rclone copyto "$bundle.sha256" "$remote_path/${name}.tar.gz.sha256"
-        rclone delete "$remote_path" --min-age "${retention_days}d" --include 'licensehub_full_*.tar.gz*'
+        rclone --config "$rclone_config" copyto "$bundle" "$remote_path/${name}.tar.gz"
+        rclone --config "$rclone_config" copyto "$bundle.sha256" "$remote_path/${name}.tar.gz.sha256"
+        rclone --config "$rclone_config" delete "$remote_path" --min-age "${retention_days}d" --include 'licensehub_full_*.tar.gz*'
     fi
     echo "full backup completed: $bundle"
     rm -rf "$workdir"

@@ -7,6 +7,7 @@ class IntegrationSettings(models.Model):
         S3 = "S3", "Amazon S3"
         AZURE = "AZURE", "Azure Blob Storage"
         SHAREPOINT = "SHAREPOINT", "Microsoft SharePoint"
+        SMB = "SMB", "SMB hálózati megosztás"
 
     singleton = models.BooleanField(default=True, unique=True, editable=False)
     ldap_enabled = models.BooleanField(default=False)
@@ -32,6 +33,22 @@ class IntegrationSettings(models.Model):
     )
     backup_local_subdirectory = models.CharField(max_length=100, default="full")
     backup_remote_path = models.CharField(max_length=500, blank=True)
+    backup_smb_host = models.CharField(max_length=255, blank=True)
+    backup_smb_share = models.CharField(max_length=255, blank=True)
+    backup_smb_subdirectory = models.CharField(max_length=255, blank=True)
+    backup_smb_domain = models.CharField(max_length=100, blank=True)
+    backup_smb_username = models.CharField(max_length=255, blank=True)
+    backup_smb_password = models.TextField(blank=True)
+    backup_smb_port = models.PositiveIntegerField(default=445)
+    network_hostname = models.CharField(max_length=63, blank=True)
+    network_interface = models.CharField(max_length=50, default="ens18")
+    network_dhcp = models.BooleanField(default=True)
+    network_address = models.CharField(max_length=64, blank=True)
+    network_gateway = models.GenericIPAddressField(null=True, blank=True)
+    network_dns_primary = models.GenericIPAddressField(null=True, blank=True)
+    network_dns_secondary = models.GenericIPAddressField(null=True, blank=True)
+    network_search_domain = models.CharField(max_length=255, blank=True)
+    network_public_url = models.URLField(blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     @classmethod

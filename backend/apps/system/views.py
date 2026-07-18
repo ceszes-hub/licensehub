@@ -18,6 +18,7 @@ from apps.audit.models import AuditEvent
 from apps.accounts.models import User
 from .forms import (
     BackupSettingsForm,
+    NetworkSettingsForm,
     LDAPSettingsForm,
     SMTPSettingsForm,
     SystemSettingsForm,
@@ -248,13 +249,33 @@ def smtp_test(request):
     return render(request, "system/smtp.html", {"form": form, "result": result})
 
 
+def _write_smb_runtime_config(config):
+    runtime_dir = settings.BACKUP_PATH / ".rclone-runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    values = {
+        "host": config.backup_smb_host,
+        "port": str(config.backup_smb_port),
+        "share": config.backup_smb_share,
+        "subdirectory": config.backup_smb_subdirectory,
+        "domain": config.backup_smb_domain,
+        "username": config.backup_smb_username,
+        "password": decrypt_secret(config.backup_smb_password),
+    }
+    for name, value in values.items():
+        target = runtime_dir / name
+        target.write_text(value, encoding="utf-8")
+        target.chmod(0o600)
+
+
 @login_required
 @user_passes_test(lambda user: user.is_superuser)
 def backup_dashboard(request):
     config = IntegrationSettings.get_solo()
     form = BackupSettingsForm(request.POST or None, instance=config)
     if request.method == "POST" and "save_settings" in request.POST and form.is_valid():
-        form.save()
+        config = form.save()
+        if config.backup_destination == IntegrationSettings.BackupDestination.SMB:
+            _write_smb_runtime_config(config)
         return redirect("backup_dashboard")
     if request.method == "POST" and "backup_now" in request.POST:
         settings.BACKUP_PATH.mkdir(parents=True, exist_ok=True)
@@ -274,3 +295,14 @@ def backup_dashboard(request):
         "system/backup.html",
         {"backups": files[:100], "form": form, "config": config},
     )
+
+
+@login_required
+@user_passes_test(lambda user: user.is_superuser)
+def network_settings(request):
+    config = IntegrationSettings.get_solo()
+    form = NetworkSettingsForm(request.POST or None, instance=config)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        return redirect("network_settings")
+    return render(request, "system/network.html", {"form": form, "config": config})
