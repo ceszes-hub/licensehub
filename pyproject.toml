@@ -1,0 +1,15 @@
+[tool.black]
+line-length=100
+[tool.ruff]
+line-length=100
+exclude=['backend/apps/*/migrations']
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE='config.settings.development'
+pythonpath=['backend']
+addopts='--cov=backend/apps --cov-report=term-missing --cov-fail-under=80'
+[tool.mypy]
+plugins=['mypy_django_plugin.main']
+ignore_missing_imports=true
+mypy_path='backend'
+[tool.django-stubs]
+django_settings_module='config.settings.development'

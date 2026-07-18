@@ -1,0 +1,1 @@
+{% extends 'base.html' %}{% block content %}<h1>Rendszer?llapot</h1><table class='table'>{% for name,status in checks.items %}<tr><th>{{ name|title }}</th><td>{{ status }}</td></tr>{% endfor %}</table>{% endblock %}

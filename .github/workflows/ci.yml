@@ -1,0 +1,17 @@
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12", cache: pip}
+      - run: pip install -r backend/requirements/dev.txt
+      - run: ruff check backend tests
+      - run: black --check backend tests
+      - run: mypy backend
+      - run: pytest
+      - run: cp .env.example .env && sed -i 's/^DJANGO_SECRET_KEY=$/DJANGO_SECRET_KEY=ci-only-secret-key/' .env && sed -i 's/^POSTGRES_PASSWORD=$/POSTGRES_PASSWORD=ci-postgres-secret/' .env && sed -i 's/^REDIS_PASSWORD=$/REDIS_PASSWORD=ci-redis-secret/' .env
+      - run: docker compose config --quiet
+      - run: docker compose build web

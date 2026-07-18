@@ -1,0 +1,12 @@
+.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+backend/db.sqlite3
+backend/media/
+backend/staticfiles/
+docker/nginx/certs/*
+!docker/nginx/certs/.gitkeep
+.venv/
