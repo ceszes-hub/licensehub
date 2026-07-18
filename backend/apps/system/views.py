@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.cache import cache
 from django.db import connection
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from django.http import JsonResponse
 from django.shortcuts import render
 
@@ -102,6 +102,15 @@ def dashboard(request):
     User = get_user_model()
     today = datetime.now(timezone.utc).date()
     active = License.objects.filter(status=License.Status.ACTIVE)
+    all_licenses = License.objects.exclude(status=License.Status.ARCHIVED)
+    manufacturer_stats = list(
+        all_licenses.values("manufacturer__name").annotate(total=Count("id")).order_by("-total")[:5]
+    )
+    deployment_stats = {
+        row["deployment_mode"]: row["total"]
+        for row in all_licenses.values("deployment_mode").annotate(total=Count("id"))
+    }
+    total_licenses = all_licenses.count()
     return render(
         request,
         "dashboard.html",
@@ -110,6 +119,13 @@ def dashboard(request):
             "user_count": User.objects.count(),
             "admin_count": User.objects.filter(is_staff=True).count(),
             "license_count": active.count(),
+            "total_license_count": total_licenses,
+            "manufacturer_stats": manufacturer_stats,
+            "deployment_stats": deployment_stats,
+            "recent_licenses": all_licenses.select_related("manufacturer").order_by("-created_at")[
+                :5
+            ],
+            "concurrent_count": all_licenses.filter(concurrent=True).count(),
             "expiring_30": active.filter(
                 expires_at__gte=today, expires_at__lte=today + timedelta(days=30)
             ).count(),

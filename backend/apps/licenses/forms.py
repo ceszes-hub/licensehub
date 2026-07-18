@@ -7,13 +7,13 @@ class LicenseForm(forms.ModelForm):
     license_reference = forms.CharField(
         required=False,
         widget=forms.PasswordInput(render_value=False),
-        label="Licenckulcs vagy szerzÅ‘dÃ©sszÃ¡m",
+        label="Licenckulcs vagy szerződésszám",
     )
     notification_intervals_text = forms.CharField(
-        required=False, initial="180,90,60,30,14,7", label="Ã‰rtesÃ­tÃ©si napok"
+        required=False, initial="180,90,60,30,14,7", label="Értesítési napok"
     )
     notification_emails_text = forms.CharField(
-        required=False, label="Ã‰rtesÃ­tÃ©si e-mailek", help_text="VesszÅ‘vel elvÃ¡lasztva"
+        required=False, label="Értesítési e-mailek", help_text="Vesszővel elválasztva"
     )
 
     class Meta:
@@ -27,6 +27,27 @@ class LicenseForm(forms.ModelForm):
             "created_at",
             "updated_at",
         ]
+        labels = {
+            "name": "Elnevezés",
+            "manufacturer": "Gyártó",
+            "distributor": "Disztribútor",
+            "quantity": "Darabszám",
+            "deployment_mode": "Telepítési mód",
+            "concurrent": "Konkurens használatú",
+            "concurrent_limit": "Konkurens használati limit",
+            "license_type": "Licenctípus",
+            "purchase_date": "Vásárlás dátuma",
+            "valid_from": "Érvényesség kezdete",
+            "expires_at": "Lejárat dátuma",
+            "auto_renews": "Automatikusan megújul",
+            "notification_users": "Értesítendő személyek",
+            "cost": "Költség",
+            "currency": "Pénznem",
+            "cost_center": "Költséghely",
+            "owner": "Felelős személy",
+            "status": "Státusz",
+            "notes": "Megjegyzés",
+        }
         widgets = {
             "purchase_date": forms.DateInput(attrs={"type": "date"}),
             "valid_from": forms.DateInput(attrs={"type": "date"}),
@@ -49,11 +70,9 @@ class LicenseForm(forms.ModelForm):
         try:
             values = sorted({int(v.strip()) for v in raw.split(",") if v.strip()}, reverse=True)
         except ValueError:
-            raise forms.ValidationError(
-                "Csak vesszÅ‘vel elvÃ¡lasztott egÃ©sz napÃ©rtÃ©kek adhatÃ³k meg."
-            )
+            raise forms.ValidationError("Csak vesszővel elválasztott egész napértékek adhatók meg.")
         if any(v < 1 or v > 3650 for v in values):
-            raise forms.ValidationError("Az intervallum 1 Ã©s 3650 nap kÃ¶zÃ¶tti legyen.")
+            raise forms.ValidationError("Az intervallum 1 és 3650 nap közötti legyen.")
         return values
 
     def clean_notification_emails_text(self):
@@ -87,7 +106,7 @@ class DocumentForm(forms.ModelForm):
     def clean_file(self):
         f = self.cleaned_data["file"]
         if f.size > 20 * 1024 * 1024:
-            raise forms.ValidationError("A fÃ¡jl legfeljebb 20 MB lehet.")
+            raise forms.ValidationError("A fájl legfeljebb 20 MB lehet.")
         allowed = (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".txt", ".lic", ".zip")
         if not f.name.lower().endswith(allowed):
             raise forms.ValidationError("Nem engedélyezett fájltípus.")
