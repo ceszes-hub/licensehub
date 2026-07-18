@@ -1,10 +1,10 @@
 import csv
 from django.contrib.auth.decorators import login_required, permission_required
-from django.db.models import Q
+from django.db.models import Count, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from .forms import DocumentForm, LicenseForm
-from .models import License
+from .forms import DocumentForm, LicenseForm, PartyForm
+from .models import License, LicenseDocument, Party
 
 
 @login_required
@@ -147,3 +147,58 @@ def license_export(request):
             ]
         )
     return response
+
+
+@login_required
+@permission_required("licenses.view_party", raise_exception=True)
+def party_list(request, kind):
+    party_kind = Party.Kind.MANUFACTURER if kind == "manufacturers" else Party.Kind.DISTRIBUTOR
+    title = "Gyártók" if party_kind == Party.Kind.MANUFACTURER else "Disztribútorok"
+    return render(
+        request,
+        "licenses/parties.html",
+        {"parties": Party.objects.filter(kind=party_kind), "kind": kind, "title": title},
+    )
+
+
+@login_required
+@permission_required("licenses.add_party", raise_exception=True)
+def party_create(request, kind):
+    party_kind = Party.Kind.MANUFACTURER if kind == "manufacturers" else Party.Kind.DISTRIBUTOR
+    form = PartyForm(request.POST or None)
+    if request.method == "POST" and form.is_valid():
+        obj = form.save(False)
+        obj.kind = party_kind
+        obj.save()
+        return redirect("manufacturer_list" if kind == "manufacturers" else "distributor_list")
+    return render(request, "licenses/form.html", {"form": form, "title": "Új törzsadat"})
+
+
+@login_required
+@permission_required("licenses.view_licensedocument", raise_exception=True)
+def document_list(request):
+    return render(
+        request,
+        "licenses/documents.html",
+        {
+            "documents": LicenseDocument.objects.select_related("license", "uploaded_by").order_by(
+                "-uploaded_at"
+            )
+        },
+    )
+
+
+@login_required
+@permission_required("licenses.view_license", raise_exception=True)
+def reports(request):
+    by_manufacturer = (
+        License.objects.values("manufacturer__name")
+        .annotate(total=Sum("quantity"), cost=Sum("cost"))
+        .order_by("-total")
+    )
+    by_owner = (
+        License.objects.values("owner__username").annotate(total=Count("id")).order_by("-total")
+    )
+    return render(
+        request, "licenses/reports.html", {"by_manufacturer": by_manufacturer, "by_owner": by_owner}
+    )

@@ -1,6 +1,6 @@
 ﻿from django import forms
 from .crypto import encrypt_secret
-from .models import License, LicenseDocument
+from .models import License, LicenseDocument, Party
 
 
 class LicenseForm(forms.ModelForm):
@@ -111,3 +111,10 @@ class DocumentForm(forms.ModelForm):
         if not f.name.lower().endswith(allowed):
             raise forms.ValidationError("Nem engedélyezett fájltípus.")
         return f
+
+
+class PartyForm(forms.ModelForm):
+    class Meta:
+        model = Party
+        fields = ["name", "active"]
+        labels = {"name": "Név", "active": "Aktív"}

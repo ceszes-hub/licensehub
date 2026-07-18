@@ -10,10 +10,13 @@ from django.core.cache import cache
 from django.db import connection
 from django.db.models import Count, Sum
 from django.http import JsonResponse
-from django.shortcuts import render
+from django.shortcuts import redirect, render
 
 from apps.core.models import SystemConfiguration
 from apps.licenses.models import License
+from apps.audit.models import AuditEvent
+from apps.accounts.models import User
+from .forms import SystemSettingsForm, TestEmailForm
 
 
 def _celery_status():
@@ -150,3 +153,92 @@ def dashboard(request):
 @user_passes_test(lambda user: user.is_staff)
 def system_health(request):
     return render(request, "system/health.html", {"checks": checks()})
+
+
+@login_required
+@user_passes_test(lambda user: user.is_staff)
+def audit_log(request):
+    events = AuditEvent.objects.select_related("user").all()[:500]
+    return render(request, "system/audit.html", {"events": events})
+
+
+@login_required
+@user_passes_test(lambda user: user.is_staff)
+def user_list(request):
+    return render(
+        request, "system/users.html", {"users": User.objects.prefetch_related("groups").all()}
+    )
+
+
+@login_required
+@user_passes_test(lambda user: user.is_superuser)
+def settings_view(request):
+    config = SystemConfiguration.objects.first()
+    form = SystemSettingsForm(request.POST or None, instance=config)
+    if request.method == "POST" and form.is_valid():
+        form.save()
+        return redirect("settings")
+    return render(request, "system/settings.html", {"form": form})
+
+
+@login_required
+@user_passes_test(lambda user: user.is_superuser)
+def ldap_status(request):
+    status = "Nincs engedélyezve" if not settings.LDAP_ENABLED else "Konfigurálva"
+    detail = settings.LDAP_SERVER_URI if settings.LDAP_ENABLED else "Az LDAP_ENABLED=False."
+    if request.method == "POST" and settings.LDAP_ENABLED:
+        try:
+            from ldap3 import Connection, Server
+
+            with Connection(
+                Server(settings.LDAP_SERVER_URI, use_ssl=settings.LDAP_USE_SSL),
+                user=settings.LDAP_BIND_DN,
+                password=settings.LDAP_BIND_PASSWORD,
+                auto_bind=True,
+            ):
+                pass
+            status = "Healthy"
+        except Exception as exc:
+            status = "Critical"
+            detail = type(exc).__name__
+    return render(request, "system/ldap.html", {"ldap_status": status, "detail": detail})
+
+
+@login_required
+@user_passes_test(lambda user: user.is_superuser)
+def smtp_test(request):
+    form = TestEmailForm(request.POST or None)
+    result = None
+    if request.method == "POST" and form.is_valid():
+        try:
+            from django.core.mail import send_mail
+
+            send_mail(
+                "LicenseHub SMTP teszt",
+                "A LicenseHub SMTP beállítása működik.",
+                settings.DEFAULT_FROM_EMAIL,
+                [form.cleaned_data["recipient"]],
+            )
+            result = "Sikeres küldés"
+        except Exception as exc:
+            result = f"Sikertelen: {type(exc).__name__}"
+    return render(request, "system/smtp.html", {"form": form, "result": result})
+
+
+@login_required
+@user_passes_test(lambda user: user.is_superuser)
+def backup_dashboard(request):
+    if request.method == "POST":
+        settings.BACKUP_PATH.mkdir(parents=True, exist_ok=True)
+        (settings.BACKUP_PATH / ".backup-request").touch()
+        return redirect("backup_dashboard")
+    files = (
+        sorted(
+            settings.BACKUP_PATH.glob("licensehub_*.dump"),
+            key=lambda item: item.stat().st_mtime,
+            reverse=True,
+        )
+        if settings.BACKUP_PATH.exists()
+        else []
+    )
+    return render(request, "system/backup.html", {"backups": files[:100]})

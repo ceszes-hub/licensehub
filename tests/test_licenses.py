@@ -114,3 +114,24 @@ def test_ldap_backend_disabled(settings):
     settings.LDAP_ENABLED = False
     assert LDAPBackend().authenticate(None, username="u", password="p") is None
     assert LDAPBackend().get_user(999999) is None
+
+
+def test_management_pages(client, admin, settings, tmp_path):
+    settings.BACKUP_PATH = tmp_path
+    assert (
+        client.post(
+            "/licenses/manufacturers/new/", {"name": "Microsoft", "active": True}
+        ).status_code
+        == 302
+    )
+    assert client.get("/licenses/manufacturers/").status_code == 200
+    assert client.get("/licenses/distributors/").status_code == 200
+    assert client.get("/licenses/documents/").status_code == 200
+    assert client.get("/licenses/reports/").status_code == 200
+    assert client.get("/audit/").status_code == 200
+    assert client.get("/users/").status_code == 200
+    assert client.get("/settings/").status_code == 200
+    assert client.get("/settings/ldap/").status_code == 200
+    assert client.get("/settings/smtp/").status_code == 200
+    assert client.post("/backup/").status_code == 302
+    assert (tmp_path / ".backup-request").exists()

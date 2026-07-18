@@ -2,6 +2,19 @@ from django.urls import path
 from . import views
 
 urlpatterns = [
+    path("manufacturers/", views.party_list, {"kind": "manufacturers"}, name="manufacturer_list"),
+    path(
+        "manufacturers/new/",
+        views.party_create,
+        {"kind": "manufacturers"},
+        name="manufacturer_create",
+    ),
+    path("distributors/", views.party_list, {"kind": "distributors"}, name="distributor_list"),
+    path(
+        "distributors/new/", views.party_create, {"kind": "distributors"}, name="distributor_create"
+    ),
+    path("documents/", views.document_list, name="document_list"),
+    path("reports/", views.reports, name="reports"),
     path("", views.license_list, name="license_list"),
     path("new/", views.license_create, name="license_create"),
     path("export.csv", views.license_export, name="license_export"),

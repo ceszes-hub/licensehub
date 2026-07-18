@@ -1,0 +1,1 @@
+{% extends "base.html" %}{% block content %}<div class="page-head"><div><h1>LDAP / Active Directory</h1><p>Kapcsolat diagnosztika</p></div></div><article class="panel"><h2>&Aacute;llapot: {{ ldap_status }}</h2><p>{{ detail }}</p><form method="post">{% csrf_token %}<button class="button primary">Kapcsolat tesztel&eacute;se</button></form></article>{% endblock %}
