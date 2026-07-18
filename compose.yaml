@@ -1,59 +1,139 @@
 x-app: &app
-  build: {context: ./backend}
-  env_file: .env
+  build:
+    context: ./backend
+  env_file:
+    - .env
   restart: unless-stopped
-  networks: [internal]
-  volumes: [static:/app/staticfiles, media:/app/media, backups:/backups]
+  networks:
+    - internal
+  volumes:
+    - static:/app/staticfiles
+    - media:/app/media
+    - backups:/backups
   depends_on:
-    postgres: {condition: service_healthy}
-    redis: {condition: service_healthy}
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
 services:
   nginx:
     image: nginx:1.28.0-alpine
     restart: unless-stopped
-    ports: ["80:80", "443:443"]
-    networks: [internal]
-    volumes: [./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro, ./docker/nginx/certs:/etc/nginx/certs:ro, static:/static:ro, media:/media:ro]
-    depends_on: {web: {condition: service_healthy}}
+    ports:
+      - "0.0.0.0:80:80"
+      - "0.0.0.0:443:443"
+    networks:
+      - frontend
+    volumes:
+      - ./docker/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./docker/nginx/certs:/etc/nginx/certs:ro
+      - static:/static:ro
+      - media:/media:ro
+    depends_on:
+      web:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "nginx", "-t"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
   web:
     <<: *app
-    command: ["/app/entrypoint.sh"]
-    healthcheck: {test: ["CMD","python","-c","import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/')"], interval: 20s, timeout: 5s, retries: 5}
+    networks:
+      - frontend
+      - internal
+    command:
+      - /app/entrypoint.sh
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/')"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
   postgres:
     image: postgres:17.6-alpine
     restart: unless-stopped
-    env_file: .env
-    networks: [internal]
-    volumes: [postgres:/var/lib/postgresql/data]
-    healthcheck: {test: ["CMD-SHELL","pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"], interval: 10s, timeout: 5s, retries: 10}
-  redis:
-    image: redis:7.4.5-alpine
-    restart: unless-stopped
-    env_file: .env
-    command:
-      - sh
-      - -c
-      - 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"' 
-    networks: [internal]
-    volumes: [redis:/data]
+    env_file:
+      - .env
+    networks:
+      - internal
+    volumes:
+      - postgres:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", 'redis-cli -a "$$REDIS_PASSWORD" ping | grep PONG']
+      test: ["CMD-SHELL", 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
       interval: 10s
       timeout: 5s
       retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7.4.5-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    command:
+      - sh
+      - -c
+      - 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"'
+    networks:
+      - internal
+    volumes:
+      - redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", 'redis-cli -a "$$REDIS_PASSWORD" ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
   celery-worker:
     <<: *app
-    command: ["celery","-A","config","worker","-l","INFO"]
+    command: ["celery", "-A", "config", "worker", "--loglevel=INFO"]
+    healthcheck:
+      test: ["CMD-SHELL", 'celery -A config inspect ping --timeout=5 | grep -q pong']
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
   celery-beat:
     <<: *app
-    command: ["celery","-A","config","beat","-l","INFO","--scheduler","django_celery_beat.schedulers:DatabaseScheduler"]
+    command: ["celery", "-A", "config", "beat", "--loglevel=INFO", "--scheduler", "django_celery_beat.schedulers:DatabaseScheduler"]
+    healthcheck:
+      test: ["CMD-SHELL", 'grep -aq celery /proc/1/cmdline && grep -aq beat /proc/1/cmdline']
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
   backup:
     image: postgres:17.6-alpine
     restart: unless-stopped
-    env_file: .env
-    networks: [internal]
-    volumes: [./docker/backup/backup.sh:/backup.sh:ro, backups:/backups]
-    entrypoint: ["/bin/sh","/backup.sh","loop"]
-    depends_on: {postgres: {condition: service_healthy}}
-networks: {internal: {internal: true}}
-volumes: {postgres: {}, redis: {}, static: {}, media: {}, backups: {}}
+    env_file:
+      - .env
+    networks:
+      - internal
+    volumes:
+      - ./docker/backup/backup.sh:/backup.sh:ro
+      - backups:/backups
+    entrypoint: ["/bin/sh", "/backup.sh", "loop"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+networks:
+  frontend:
+    driver: bridge
+  internal:
+    driver: bridge
+    internal: true
+
+volumes:
+  postgres:
+  redis:
+  static:
+  media:
+  backups:
