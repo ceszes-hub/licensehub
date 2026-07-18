@@ -32,6 +32,6 @@ def setup(request):
             )
             record_event("FIRST_ADMIN_CREATED", request, user, "First administrator created")
             record_event("SETUP_COMPLETED", request, user, "Setup completed")
-        login(request, user)
+        login(request, user, backend="apps.accounts.backends.LockoutBackend")
         return redirect("dashboard")
     return render(request, "setup/setup.html", {"org_form": org, "admin_form": admin})

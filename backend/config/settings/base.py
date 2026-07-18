@@ -22,6 +22,7 @@ INSTALLED_APPS = [
     "apps.audit",
     "apps.core",
     "apps.system",
+    "apps.licenses",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -65,7 +66,10 @@ CELERY_BROKER_URL = REDIS + "/0"
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
 CELERY_BEAT_SCHEDULER = "django_celery_beat.schedulers:DatabaseScheduler"
 AUTH_USER_MODEL = "accounts.User"
-AUTHENTICATION_BACKENDS = ["apps.accounts.backends.LockoutBackend"]
+AUTHENTICATION_BACKENDS = [
+    "apps.accounts.ldap_backend.LDAPBackend",
+    "apps.accounts.backends.LockoutBackend",
+]
 PASSWORD_HASHERS = [
     "django.contrib.auth.hashers.Argon2PasswordHasher",
     "django.contrib.auth.hashers.PBKDF2PasswordHasher",
@@ -100,8 +104,32 @@ LOGIN_LOCKOUT_SECONDS = env.int("LOGIN_LOCKOUT_SECONDS", default=900)
 
 TLS_MONITOR_CERT_PATH = Path(env("TLS_MONITOR_CERT_PATH", default="/tls/fullchain.pem"))
 CELERY_BEAT_SCHEDULE = {
+    "licensehub-expiry-notifications": {
+        "task": "apps.licenses.tasks.send_expiry_notifications",
+        "schedule": 86400.0,
+    },
     "licensehub-health-heartbeat": {
         "task": "apps.system.tasks.periodic_health_check",
         "schedule": 60.0,
-    }
+    },
 }
+
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="licensehub@localhost")
+EMAIL_BACKEND = env("EMAIL_BACKEND", default="django.core.mail.backends.smtp.EmailBackend")
+EMAIL_HOST = env("SMTP_HOST", default="localhost")
+EMAIL_PORT = env.int("SMTP_PORT", default=25)
+EMAIL_HOST_USER = env("SMTP_USER", default="")
+EMAIL_HOST_PASSWORD = env("SMTP_PASSWORD", default="")
+EMAIL_USE_TLS = env.bool("SMTP_USE_TLS", default=False)
+
+LDAP_ENABLED = env.bool("LDAP_ENABLED", default=False)
+LDAP_SERVER_URI = env("LDAP_SERVER_URI", default="")
+LDAP_USE_SSL = env.bool("LDAP_USE_SSL", default=True)
+LDAP_BASE_DN = env("LDAP_BASE_DN", default="")
+LDAP_BIND_DN = env("LDAP_BIND_DN", default="")
+LDAP_BIND_PASSWORD = env("LDAP_BIND_PASSWORD", default="")
+LDAP_USER_DOMAIN = env("LDAP_USER_DOMAIN", default="")
+LDAP_USER_FILTER = env("LDAP_USER_FILTER", default="(sAMAccountName={username})")
+LDAP_ADMIN_GROUP = env("LDAP_ADMIN_GROUP", default="")
+LDAP_MANAGER_GROUP = env("LDAP_MANAGER_GROUP", default="")
+LDAP_READER_GROUP = env("LDAP_READER_GROUP", default="")

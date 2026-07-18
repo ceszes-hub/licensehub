@@ -1,6 +1,6 @@
 import shutil
 import ssl
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from celery import current_app
 from django.conf import settings
@@ -8,10 +8,12 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.cache import cache
 from django.db import connection
+from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import render
 
 from apps.core.models import SystemConfiguration
+from apps.licenses.models import License
 
 
 def _celery_status():
@@ -98,6 +100,8 @@ def health(request):
 def dashboard(request):
     cfg = SystemConfiguration.objects.first()
     User = get_user_model()
+    today = datetime.now(timezone.utc).date()
+    active = License.objects.filter(status=License.Status.ACTIVE)
     return render(
         request,
         "dashboard.html",
@@ -105,6 +109,22 @@ def dashboard(request):
             "config": cfg,
             "user_count": User.objects.count(),
             "admin_count": User.objects.filter(is_staff=True).count(),
+            "license_count": active.count(),
+            "expiring_30": active.filter(
+                expires_at__gte=today, expires_at__lte=today + timedelta(days=30)
+            ).count(),
+            "expiring_60": active.filter(
+                expires_at__gt=today + timedelta(days=30),
+                expires_at__lte=today + timedelta(days=60),
+            ).count(),
+            "expiring_90": active.filter(
+                expires_at__gt=today + timedelta(days=60),
+                expires_at__lte=today + timedelta(days=90),
+            ).count(),
+            "expired_count": License.objects.filter(expires_at__lt=today)
+            .exclude(status=License.Status.ARCHIVED)
+            .count(),
+            "total_cost": active.aggregate(value=Sum("cost"))["value"] or 0,
             "checks": checks(),
         },
     )
