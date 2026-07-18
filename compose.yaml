@@ -30,10 +30,17 @@ services:
     image: redis:7.4.5-alpine
     restart: unless-stopped
     env_file: .env
-    command: ["sh","-c","exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD""]
+    command:
+      - sh
+      - -c
+      - 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"' 
     networks: [internal]
     volumes: [redis:/data]
-    healthcheck: {test: ["CMD-SHELL","redis-cli -a "$$REDIS_PASSWORD" ping | grep PONG"], interval: 10s, timeout: 5s, retries: 10}
+    healthcheck:
+      test: ["CMD-SHELL", 'redis-cli -a "$$REDIS_PASSWORD" ping | grep PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 10
   celery-worker:
     <<: *app
     command: ["celery","-A","config","worker","-l","INFO"]
