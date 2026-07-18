@@ -1,4 +1,4 @@
-from pathlib import Path
+﻿from pathlib import Path
 import environ
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -87,6 +87,7 @@ TIME_ZONE = env("TIME_ZONE", default="Europe/Budapest")
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = "/static/"
+STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = Path(env("STATIC_ROOT", default="/app/staticfiles"))
 MEDIA_URL = "/media/"
 MEDIA_ROOT = Path(env("MEDIA_ROOT", default="/app/media"))
