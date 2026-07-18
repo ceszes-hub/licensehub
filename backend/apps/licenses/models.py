@@ -13,6 +13,8 @@ class Party(models.Model):
     name = models.CharField(max_length=200)
     kind = models.CharField(max_length=20, choices=Kind.choices)
     active = models.BooleanField(default=True)
+    postal_code = models.CharField(max_length=20, blank=True)
+    address = models.CharField(max_length=255, blank=True)
 
     class Meta:
         ordering = ["name"]
@@ -20,6 +22,21 @@ class Party(models.Model):
 
     def __str__(self):
         return self.name
+
+
+class PartyContact(models.Model):
+    party = models.ForeignKey(Party, related_name="contacts", on_delete=models.CASCADE)
+    name = models.CharField(max_length=200)
+    email = models.EmailField(blank=True)
+    phone = models.CharField(max_length=50, blank=True)
+    position = models.CharField(max_length=100, blank=True)
+    active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return f"{self.name} ({self.party.name})"
 
 
 class License(models.Model):

@@ -1,2 +1,2 @@
 {% extends 'base.html' %}
-{% block content %}<h1>Rendszerállapot</h1><table class="table">{% for name,status in checks.items %}<tr><th>{{ name|title }}</th><td>{{ status }}</td></tr>{% endfor %}</table>{% endblock %}
+{% block content %}{% include "system/_settings_nav.html" %}<h1>Rendszerállapot</h1><table class="table">{% for name,status in checks.items %}<tr><th>{{ name|title }}</th><td>{{ status }}</td></tr>{% endfor %}</table>{% endblock %}

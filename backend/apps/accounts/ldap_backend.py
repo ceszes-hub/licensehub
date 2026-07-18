@@ -10,17 +10,33 @@ logger = logging.getLogger("security")
 
 class LDAPBackend(BaseBackend):
     def authenticate(self, request, username=None, password=None, **kwargs):
-        if not settings.LDAP_ENABLED or not username or not password:
+        try:
+            from apps.system.models import IntegrationSettings
+            from apps.licenses.crypto import decrypt_secret
+
+            stored = IntegrationSettings.objects.first()
+        except Exception:
+            stored = None
+        enabled = stored.ldap_enabled if stored else settings.LDAP_ENABLED
+        if not enabled or not username or not password:
             return None
         try:
-            server = Server(settings.LDAP_SERVER_URI, use_ssl=settings.LDAP_USE_SSL, get_info=ALL)
-            bind_user = settings.LDAP_BIND_DN or f"{settings.LDAP_USER_DOMAIN}\\{username}"
-            bind_password = settings.LDAP_BIND_PASSWORD or password
+            server_uri = stored.ldap_server_uri if stored else settings.LDAP_SERVER_URI
+            use_ssl = stored.ldap_use_ssl if stored else settings.LDAP_USE_SSL
+            bind_dn = stored.ldap_bind_dn if stored else settings.LDAP_BIND_DN
+            bind_secret = (
+                decrypt_secret(stored.ldap_bind_password) if stored else settings.LDAP_BIND_PASSWORD
+            )
+            base_dn = stored.ldap_base_dn if stored else settings.LDAP_BASE_DN
+            user_filter = stored.ldap_user_filter if stored else settings.LDAP_USER_FILTER
+            server = Server(server_uri, use_ssl=use_ssl, get_info=ALL)
+            bind_user = bind_dn or f"{settings.LDAP_USER_DOMAIN}\\{username}"
+            bind_password = bind_secret or password
             with Connection(server, user=bind_user, password=bind_password, auto_bind=True) as conn:
-                query = settings.LDAP_USER_FILTER.format(username=username)
-                if settings.LDAP_BIND_DN:
+                query = user_filter.format(username=username)
+                if bind_dn:
                     conn.search(
-                        settings.LDAP_BASE_DN,
+                        base_dn,
                         query,
                         search_scope=SUBTREE,
                         attributes=["mail", "givenName", "sn", "memberOf", "userPrincipalName"],
@@ -32,7 +48,7 @@ class LDAPBackend(BaseBackend):
                         pass
                 else:
                     conn.search(
-                        settings.LDAP_BASE_DN,
+                        base_dn,
                         query,
                         search_scope=SUBTREE,
                         attributes=["mail", "givenName", "sn", "memberOf"],
@@ -56,9 +72,15 @@ class LDAPBackend(BaseBackend):
                     for v in (entry.memberOf.values if entry and "memberOf" in entry else [])
                 }
                 role_map = {
-                    settings.LDAP_ADMIN_GROUP: "License Administrators",
-                    settings.LDAP_MANAGER_GROUP: "License Managers",
-                    settings.LDAP_READER_GROUP: "License Readers",
+                    (
+                        stored.ldap_admin_group if stored else settings.LDAP_ADMIN_GROUP
+                    ): "License Administrators",
+                    (
+                        stored.ldap_manager_group if stored else settings.LDAP_MANAGER_GROUP
+                    ): "License Managers",
+                    (
+                        stored.ldap_reader_group if stored else settings.LDAP_READER_GROUP
+                    ): "License Readers",
                 }
                 user.groups.remove(*Group.objects.filter(name__in=role_map.values()))
                 for ad_group, local_group in role_map.items():

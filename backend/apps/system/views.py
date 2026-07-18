@@ -16,7 +16,9 @@ from apps.core.models import SystemConfiguration
 from apps.licenses.models import License
 from apps.audit.models import AuditEvent
 from apps.accounts.models import User
-from .forms import SystemSettingsForm, TestEmailForm
+from .forms import LDAPSettingsForm, SMTPSettingsForm, SystemSettingsForm
+from .models import IntegrationSettings
+from apps.licenses.crypto import decrypt_secret
 
 
 def _celery_status():
@@ -184,44 +186,60 @@ def settings_view(request):
 @login_required
 @user_passes_test(lambda user: user.is_superuser)
 def ldap_status(request):
-    status = "Nincs engedélyezve" if not settings.LDAP_ENABLED else "Konfigurálva"
-    detail = settings.LDAP_SERVER_URI if settings.LDAP_ENABLED else "Az LDAP_ENABLED=False."
-    if request.method == "POST" and settings.LDAP_ENABLED:
-        try:
-            from ldap3 import Connection, Server
+    config = IntegrationSettings.get_solo()
+    form = LDAPSettingsForm(request.POST or None, instance=config)
+    result = None
+    if request.method == "POST" and form.is_valid():
+        config = form.save()
+        result = "Beállítások mentve."
+        if "test" in request.POST and config.ldap_enabled:
+            try:
+                from ldap3 import Connection, Server
 
-            with Connection(
-                Server(settings.LDAP_SERVER_URI, use_ssl=settings.LDAP_USE_SSL),
-                user=settings.LDAP_BIND_DN,
-                password=settings.LDAP_BIND_PASSWORD,
-                auto_bind=True,
-            ):
-                pass
-            status = "Healthy"
-        except Exception as exc:
-            status = "Critical"
-            detail = type(exc).__name__
-    return render(request, "system/ldap.html", {"ldap_status": status, "detail": detail})
+                with Connection(
+                    Server(config.ldap_server_uri, use_ssl=config.ldap_use_ssl),
+                    user=config.ldap_bind_dn,
+                    password=decrypt_secret(config.ldap_bind_password),
+                    auto_bind=True,
+                ):
+                    pass
+                result = "LDAP kapcsolat sikeres."
+            except Exception as exc:
+                result = f"LDAP kapcsolat sikertelen: {type(exc).__name__}"
+    return render(request, "system/ldap.html", {"form": form, "result": result})
 
 
 @login_required
 @user_passes_test(lambda user: user.is_superuser)
 def smtp_test(request):
-    form = TestEmailForm(request.POST or None)
+    config = IntegrationSettings.get_solo()
+    form = SMTPSettingsForm(request.POST or None, instance=config)
     result = None
     if request.method == "POST" and form.is_valid():
-        try:
-            from django.core.mail import send_mail
+        config = form.save()
+        result = "Beállítások mentve."
+        recipient = form.cleaned_data.get("test_recipient")
+        if "test" in request.POST and recipient:
+            try:
+                from django.core.mail import EmailMessage, get_connection
 
-            send_mail(
-                "LicenseHub SMTP teszt",
-                "A LicenseHub SMTP beállítása működik.",
-                settings.DEFAULT_FROM_EMAIL,
-                [form.cleaned_data["recipient"]],
-            )
-            result = "Sikeres küldés"
-        except Exception as exc:
-            result = f"Sikertelen: {type(exc).__name__}"
+                connection = get_connection(
+                    host=config.smtp_host,
+                    port=config.smtp_port,
+                    username=config.smtp_username,
+                    password=decrypt_secret(config.smtp_password),
+                    use_tls=config.smtp_use_tls,
+                )
+                EmailMessage(
+                    "LicenseHub SMTP teszt",
+                    "A LicenseHub SMTP beállítása működik.",
+                    config.smtp_from_email,
+                    [recipient],
+                    connection=connection,
+                ).send()
+                result = "Tesztüzenet sikeresen elküldve."
+            except Exception as exc:
+                result = f"Sikertelen: {type(exc).__name__}"
     return render(request, "system/smtp.html", {"form": form, "result": result})
 
 

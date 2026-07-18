@@ -6,7 +6,7 @@ from django.core.exceptions import ValidationError
 from django.utils import timezone
 from apps.core.models import SystemConfiguration
 from apps.licenses.crypto import decrypt_secret
-from apps.licenses.models import License, NotificationLog, Party
+from apps.licenses.models import License, NotificationLog, Party, PartyContact
 from apps.licenses.tasks import send_expiry_notifications
 
 pytestmark = pytest.mark.django_db
@@ -80,6 +80,37 @@ def test_expiry_notification(settings):
     assert len(mail.outbox) == 1
     assert NotificationLog.objects.get(license=obj).success
     assert send_expiry_notifications()["sent"] == 0
+
+
+def test_distributor_with_multiple_contacts(client, admin):
+    response = client.post(
+        "/licenses/distributors/new/",
+        {
+            "name": "Example Kft.",
+            "postal_code": "1111",
+            "address": "Budapest, Példa utca 1.",
+            "active": "on",
+            "contacts-TOTAL_FORMS": "2",
+            "contacts-INITIAL_FORMS": "0",
+            "contacts-MIN_NUM_FORMS": "0",
+            "contacts-MAX_NUM_FORMS": "1000",
+            "contacts-0-name": "Kiss Péter",
+            "contacts-0-position": "Értékesítő",
+            "contacts-0-email": "peter@example.com",
+            "contacts-0-phone": "+36 1 234 5678",
+            "contacts-0-active": "on",
+            "contacts-1-name": "Nagy Anna",
+            "contacts-1-position": "Ügyfélszolgálat",
+            "contacts-1-email": "anna@example.com",
+            "contacts-1-phone": "+36 30 123 4567",
+            "contacts-1-active": "on",
+        },
+    )
+    assert response.status_code == 302
+    distributor = Party.objects.get(kind=Party.Kind.DISTRIBUTOR)
+    assert distributor.postal_code == "1111"
+    assert distributor.contacts.count() == 2
+    assert PartyContact.objects.filter(party=distributor, name="Nagy Anna").exists()
 
 
 def test_party_unique():

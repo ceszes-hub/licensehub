@@ -1,6 +1,9 @@
-﻿from django import forms
+from typing import Any
+
+from django import forms
+from django.forms import inlineformset_factory
 from .crypto import encrypt_secret
-from .models import License, LicenseDocument, Party
+from .models import License, LicenseDocument, Party, PartyContact
 
 
 class LicenseForm(forms.ModelForm):
@@ -116,5 +119,26 @@ class DocumentForm(forms.ModelForm):
 class PartyForm(forms.ModelForm):
     class Meta:
         model = Party
-        fields = ["name", "active"]
-        labels = {"name": "Név", "active": "Aktív"}
+        fields = ["name", "postal_code", "address", "active"]
+        labels = {
+            "name": "Név",
+            "postal_code": "Irányítószám",
+            "address": "Cím",
+            "active": "Aktív",
+        }
+
+
+PartyContactFormSet: Any = inlineformset_factory(
+    Party,
+    PartyContact,
+    fields=["name", "position", "email", "phone", "active"],
+    labels={
+        "name": "Kapcsolattartó neve",
+        "position": "Beosztás",
+        "email": "E-mail-cím",
+        "phone": "Telefonszám",
+        "active": "Aktív",
+    },
+    extra=1,
+    can_delete=True,
+)

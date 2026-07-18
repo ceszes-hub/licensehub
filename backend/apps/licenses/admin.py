@@ -1,7 +1,8 @@
 from django.contrib import admin
-from .models import License, LicenseDocument, NotificationLog, Party
+from .models import License, LicenseDocument, NotificationLog, Party, PartyContact
 
 admin.site.register(Party)
+admin.site.register(PartyContact)
 admin.site.register(License)
 admin.site.register(LicenseDocument)
 

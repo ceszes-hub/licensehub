@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required, permission_required
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
-from .forms import DocumentForm, LicenseForm, PartyForm
+from .forms import DocumentForm, LicenseForm, PartyContactFormSet, PartyForm
 from .models import License, LicenseDocument, Party
 
 
@@ -166,12 +166,26 @@ def party_list(request, kind):
 def party_create(request, kind):
     party_kind = Party.Kind.MANUFACTURER if kind == "manufacturers" else Party.Kind.DISTRIBUTOR
     form = PartyForm(request.POST or None)
-    if request.method == "POST" and form.is_valid():
+    formset = (
+        PartyContactFormSet(request.POST or None, prefix="contacts")
+        if party_kind == Party.Kind.DISTRIBUTOR
+        else None
+    )
+    valid_contacts = formset is None or formset.is_valid()
+    if request.method == "POST" and form.is_valid() and valid_contacts:
         obj = form.save(False)
         obj.kind = party_kind
         obj.save()
+        if formset is not None:
+            formset.instance = obj
+            formset.save()
         return redirect("manufacturer_list" if kind == "manufacturers" else "distributor_list")
-    return render(request, "licenses/form.html", {"form": form, "title": "Új törzsadat"})
+    template = "licenses/distributor_form.html" if formset is not None else "licenses/form.html"
+    return render(
+        request,
+        template,
+        {"form": form, "formset": formset, "title": "Új törzsadat"},
+    )
 
 
 @login_required
