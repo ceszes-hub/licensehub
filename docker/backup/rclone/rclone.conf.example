@@ -1,0 +1,3 @@
+# Configure with: docker compose run --rm --entrypoint rclone backup config
+# Place the generated rclone.conf in this directory.
+# Suggested remote names: amazon, azure, sharepoint.

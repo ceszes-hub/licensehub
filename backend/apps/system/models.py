@@ -2,6 +2,12 @@ from django.db import models
 
 
 class IntegrationSettings(models.Model):
+    class BackupDestination(models.TextChoices):
+        LOCAL = "LOCAL", "Helyi tárhely"
+        S3 = "S3", "Amazon S3"
+        AZURE = "AZURE", "Azure Blob Storage"
+        SHAREPOINT = "SHAREPOINT", "Microsoft SharePoint"
+
     singleton = models.BooleanField(default=True, unique=True, editable=False)
     ldap_enabled = models.BooleanField(default=False)
     ldap_server_uri = models.CharField(max_length=255, blank=True)
@@ -19,6 +25,13 @@ class IntegrationSettings(models.Model):
     smtp_username = models.CharField(max_length=255, blank=True)
     smtp_password = models.TextField(blank=True)
     smtp_from_email = models.EmailField(blank=True)
+    backup_retention_days = models.PositiveIntegerField(default=14)
+    backup_interval_hours = models.PositiveIntegerField(default=24)
+    backup_destination = models.CharField(
+        max_length=20, choices=BackupDestination.choices, default=BackupDestination.LOCAL
+    )
+    backup_local_subdirectory = models.CharField(max_length=100, default="full")
+    backup_remote_path = models.CharField(max_length=500, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     @classmethod

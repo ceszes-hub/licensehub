@@ -1,15 +1,18 @@
 # LicenseHub Enterprise v1.0-dev0
 
-Ny?lt forr?sk?d?, Docker-first licenckezel?si alapplatform Django, PostgreSQL 17, Redis, Celery ?s Nginx haszn?lat?val.
+Nyílt forráskódú, Docker-first licenckezelő platform Django, PostgreSQL 17, Redis, Celery és Nginx használatával.
 
-## Gyors telep?t?s (Ubuntu Server 24.04)
+## Gyors telepítés (Ubuntu Server 24.04)
 
 ```bash
 git clone https://github.com/ceszes-hub/licensehub.git
 cd licensehub
-sudo ./install.sh
+sudo bash install.sh
 ```
 
-A telep?t? er?s titkokat ?s SAN mez?s, RSA-3072 ?nal??rt TLS-tan?s?tv?nyt gener?l, majd ki?rja a `/setup/` URL-t. ?les haszn?lathoz cser?lje a tan?s?tv?nyt hiteles CA ?ltal kiadottra.
+A telepítő erős titkokat és SAN mezős, RSA-3072 önaláírt TLS-tanúsítványt generál, majd kiírja a `/setup/` URL-t. Éles használathoz a tanúsítványt hiteles CA által kiadottra kell cserélni.
 
-Teszt: `docker compose run --rm web pytest`. R?szletek: [docs/INSTALLATION.md](docs/INSTALLATION.md).
+Teszt: `docker compose run --rm web pytest`.
+
+- [Telepítési útmutató](docs/INSTALLATION.md)
+- [Teljes backup és visszaállítás](docs/BACKUP_RESTORE.md)

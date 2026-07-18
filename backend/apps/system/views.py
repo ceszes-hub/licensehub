@@ -16,7 +16,12 @@ from apps.core.models import SystemConfiguration
 from apps.licenses.models import License
 from apps.audit.models import AuditEvent
 from apps.accounts.models import User
-from .forms import LDAPSettingsForm, SMTPSettingsForm, SystemSettingsForm
+from .forms import (
+    BackupSettingsForm,
+    LDAPSettingsForm,
+    SMTPSettingsForm,
+    SystemSettingsForm,
+)
 from .models import IntegrationSettings
 from apps.licenses.crypto import decrypt_secret
 
@@ -85,7 +90,7 @@ def checks():
     result["static"] = "Healthy" if settings.STATIC_ROOT.exists() else "Warning"
     result["media"] = "Healthy" if settings.MEDIA_ROOT.exists() else "Warning"
     try:
-        dumps = list(settings.BACKUP_PATH.glob("licensehub_*.dump"))
+        dumps = list(settings.BACKUP_PATH.rglob("licensehub_full_*.tar.gz"))
         result["backup"] = "Healthy" if dumps else "Warning"
     except OSError:
         result["backup"] = "Critical"
@@ -246,17 +251,26 @@ def smtp_test(request):
 @login_required
 @user_passes_test(lambda user: user.is_superuser)
 def backup_dashboard(request):
-    if request.method == "POST":
+    config = IntegrationSettings.get_solo()
+    form = BackupSettingsForm(request.POST or None, instance=config)
+    if request.method == "POST" and "save_settings" in request.POST and form.is_valid():
+        form.save()
+        return redirect("backup_dashboard")
+    if request.method == "POST" and "backup_now" in request.POST:
         settings.BACKUP_PATH.mkdir(parents=True, exist_ok=True)
         (settings.BACKUP_PATH / ".backup-request").touch()
         return redirect("backup_dashboard")
     files = (
         sorted(
-            settings.BACKUP_PATH.glob("licensehub_*.dump"),
+            settings.BACKUP_PATH.rglob("licensehub_full_*.tar.gz"),
             key=lambda item: item.stat().st_mtime,
             reverse=True,
         )
         if settings.BACKUP_PATH.exists()
         else []
     )
-    return render(request, "system/backup.html", {"backups": files[:100]})
+    return render(
+        request,
+        "system/backup.html",
+        {"backups": files[:100], "form": form, "config": config},
+    )

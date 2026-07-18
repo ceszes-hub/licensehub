@@ -10,3 +10,5 @@ backend/staticfiles/
 docker/nginx/certs/*
 !docker/nginx/certs/.gitkeep
 .venv/
+
+docker/backup/rclone/rclone.conf

@@ -47,7 +47,7 @@ services:
     volumes:
       - static:/app/staticfiles
       - media:/app/media
-      - backups:/backups
+      - ${BACKUP_HOST_PATH:-backups}:/backups
       - ./docker/nginx/certs:/tls:ro
     command:
       - /app/entrypoint.sh
@@ -115,7 +115,8 @@ services:
       start_period: 20s
 
   backup:
-    image: postgres:17.6-alpine
+    build:
+      context: ./docker/backup
     restart: unless-stopped
     env_file:
       - .env
@@ -123,7 +124,15 @@ services:
       - internal
     volumes:
       - ./docker/backup/backup.sh:/backup.sh:ro
-      - backups:/backups
+      - ./docker/backup/restore.sh:/restore.sh:ro
+      - ./.env:/source/.env:ro
+      - ./compose.yaml:/source/compose.yaml:ro
+      - ./docker/nginx/nginx.conf:/source/docker/nginx/nginx.conf:ro
+      - ./docker/nginx/certs:/source/docker/nginx/certs:ro
+      - ./docker/backup/rclone:/root/.config/rclone:ro
+      - ./docker/backup/rclone:/source/docker/backup/rclone:ro
+      - media:/media
+      - ${BACKUP_HOST_PATH:-backups}:/backups
     entrypoint: ["/bin/sh", "/backup.sh", "loop"]
     depends_on:
       postgres:

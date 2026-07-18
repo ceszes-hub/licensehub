@@ -94,3 +94,47 @@ class SMTPSettingsForm(forms.ModelForm):
         if commit:
             obj.save()
         return obj
+
+
+class BackupSettingsForm(forms.ModelForm):
+    class Meta:
+        model = IntegrationSettings
+        fields = [
+            "backup_retention_days",
+            "backup_interval_hours",
+            "backup_destination",
+            "backup_local_subdirectory",
+            "backup_remote_path",
+        ]
+        labels = {
+            "backup_retention_days": "Megőrzési idő (nap)",
+            "backup_interval_hours": "Mentési gyakoriság (óra)",
+            "backup_destination": "Mentés célja",
+            "backup_local_subdirectory": "Helyi alkönyvtár",
+            "backup_remote_path": "Felhős rclone célútvonal",
+        }
+        help_texts = {
+            "backup_local_subdirectory": "A /backups könyvtáron belüli név, például full.",
+            "backup_remote_path": "Például amazon:licensehub, azure:backup vagy sharepoint:LicenseHub.",
+        }
+
+    def clean_backup_retention_days(self):
+        value = self.cleaned_data["backup_retention_days"]
+        if not 1 <= value <= 3650:
+            raise forms.ValidationError("A megőrzési idő 1 és 3650 nap között legyen.")
+        return value
+
+    def clean_backup_interval_hours(self):
+        value = self.cleaned_data["backup_interval_hours"]
+        if not 1 <= value <= 8760:
+            raise forms.ValidationError("A gyakoriság 1 és 8760 óra között legyen.")
+        return value
+
+    def clean(self):
+        cleaned = super().clean()
+        destination = cleaned.get("backup_destination")
+        if destination != IntegrationSettings.BackupDestination.LOCAL and not cleaned.get(
+            "backup_remote_path"
+        ):
+            self.add_error("backup_remote_path", "Felhős mentésnél a célútvonal kötelező.")
+        return cleaned

@@ -189,5 +189,5 @@ def test_management_pages(client, admin, settings, tmp_path):
     assert client.get("/settings/").status_code == 200
     assert client.get("/settings/ldap/").status_code == 200
     assert client.get("/settings/smtp/").status_code == 200
-    assert client.post("/backup/").status_code == 302
+    assert client.post("/backup/", {"backup_now": "1"}).status_code == 302
     assert (tmp_path / ".backup-request").exists()
