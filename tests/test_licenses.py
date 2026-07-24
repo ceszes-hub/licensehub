@@ -167,6 +167,33 @@ def test_license_list_edit_duplicate_archive(client, admin):
     assert obj.status == License.Status.ARCHIVED
 
 
+def test_custom_report_preview_and_csv(client, admin):
+    manufacturer = Party.objects.create(name="Report Vendor", kind=Party.Kind.MANUFACTURER)
+    PartyContact.objects.create(
+        party=manufacturer, name="Contact", phone="+36 1 234", email="contact@example.com"
+    )
+    License.objects.create(
+        reference_code="LH-REPORT-1",
+        name="Report Product",
+        manufacturer=manufacturer,
+        quantity=10,
+        used_quantity=3,
+        organization="IT",
+        deployment_mode="CLOUD",
+        license_type="SUBSCRIPTION",
+        status="ACTIVE",
+        currency="HUF",
+    )
+    query = "?columns=reference&columns=name&columns=manufacturer_contacts&status=ACTIVE"
+    response = client.get("/licenses/reports/" + query)
+    assert response.status_code == 200
+    assert b"LH-REPORT-1" in response.content
+    csv_response = client.get("/licenses/reports/" + query + "&export=csv")
+    assert csv_response.status_code == 200
+    assert csv_response.content.startswith(b"\xef\xbb\xbf")
+    assert b"contact@example.com" in csv_response.content
+
+
 def test_ldap_backend_disabled(settings):
     from apps.accounts.ldap_backend import LDAPBackend
 
@@ -179,7 +206,15 @@ def test_management_pages(client, admin, settings, tmp_path):
     settings.BACKUP_PATH = tmp_path
     assert (
         client.post(
-            "/licenses/manufacturers/new/", {"name": "Microsoft", "active": True}
+            "/licenses/manufacturers/new/",
+            {
+                "name": "Microsoft",
+                "active": True,
+                "contacts-TOTAL_FORMS": "0",
+                "contacts-INITIAL_FORMS": "0",
+                "contacts-MIN_NUM_FORMS": "0",
+                "contacts-MAX_NUM_FORMS": "1000",
+            },
         ).status_code
         == 302
     )

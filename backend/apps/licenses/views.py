@@ -282,11 +282,7 @@ def party_list(request, kind):
 def _party_form(request, kind, instance=None):
     party_kind = _party_kind(kind)
     form = PartyForm(request.POST or None, instance=instance)
-    formset = (
-        PartyContactFormSet(request.POST or None, instance=instance, prefix="contacts")
-        if party_kind == Party.Kind.DISTRIBUTOR
-        else None
-    )
+    formset = PartyContactFormSet(request.POST or None, instance=instance, prefix="contacts")
     valid_contacts = formset is None or formset.is_valid()
     if request.method == "POST" and form.is_valid() and valid_contacts:
         obj = form.save(False)
@@ -347,14 +343,90 @@ def party_edit(request, kind, pk):
 @login_required
 @permission_required("licenses.view_license", raise_exception=True)
 def reports(request):
-    by_manufacturer = (
-        License.objects.values("manufacturer__name")
-        .annotate(total=Sum("quantity"), cost=Sum("cost"))
-        .order_by("-total")
+    columns = {
+        "reference": ("Licencazonosító", lambda obj: obj.reference_code),
+        "name": ("Termék", lambda obj: obj.name),
+        "type": ("Licenctípus", lambda obj: obj.get_license_type_display()),
+        "manufacturer": ("Gyártó", lambda obj: str(obj.manufacturer or "")),
+        "manufacturer_contacts": (
+            "Gyártói kapcsolattartók",
+            lambda obj: (
+                "; ".join(
+                    f"{c.name} | {c.phone} | {c.email}" for c in obj.manufacturer.contacts.all()
+                )
+                if obj.manufacturer
+                else ""
+            ),
+        ),
+        "distributor": ("Disztribútor", lambda obj: str(obj.distributor or "")),
+        "distributor_contacts": (
+            "Disztribútori kapcsolattartók",
+            lambda obj: (
+                "; ".join(
+                    f"{c.name} | {c.phone} | {c.email}" for c in obj.distributor.contacts.all()
+                )
+                if obj.distributor
+                else ""
+            ),
+        ),
+        "organization": ("Szervezet", lambda obj: obj.organization),
+        "status": ("Státusz", lambda obj: obj.get_status_display()),
+        "quantity": ("Darabszám", lambda obj: obj.quantity),
+        "used": ("Felhasznált", lambda obj: obj.used_quantity),
+        "expires": ("Lejárat", lambda obj: obj.expires_at or ""),
+        "cost": ("Költség", lambda obj: obj.cost or ""),
+        "currency": ("Pénznem", lambda obj: obj.currency),
+        "owner": ("Felelős", lambda obj: str(obj.owner or "")),
+    }
+    selected = [key for key in request.GET.getlist("columns") if key in columns]
+    if not selected:
+        selected = [
+            "reference",
+            "name",
+            "manufacturer",
+            "organization",
+            "status",
+            "quantity",
+            "expires",
+        ]
+    items = License.objects.select_related("manufacturer", "distributor", "owner").prefetch_related(
+        "manufacturer__contacts", "distributor__contacts"
     )
-    by_owner = (
-        License.objects.values("owner__username").annotate(total=Count("id")).order_by("-total")
-    )
+    status = request.GET.get("status", "")
+    manufacturer = request.GET.get("manufacturer", "")
+    distributor = request.GET.get("distributor", "")
+    organization = request.GET.get("organization", "").strip()
+    if status:
+        items = items.filter(status=status)
+    if manufacturer:
+        items = items.filter(manufacturer_id=manufacturer)
+    if distributor:
+        items = items.filter(distributor_id=distributor)
+    if organization:
+        items = items.filter(organization__icontains=organization)
+    rows = [[columns[key][1](obj) for key in selected] for obj in items[:500]]
+    if request.GET.get("export") == "csv":
+        response = HttpResponse(content_type="text/csv; charset=utf-8")
+        response["Content-Disposition"] = 'attachment; filename="license-report.csv"'
+        response.write("\ufeff")
+        writer = csv.writer(response)
+        writer.writerow([columns[key][0] for key in selected])
+        writer.writerows(rows)
+        return response
     return render(
-        request, "licenses/reports.html", {"by_manufacturer": by_manufacturer, "by_owner": by_owner}
+        request,
+        "licenses/reports.html",
+        {
+            "available_columns": [(key, value[0]) for key, value in columns.items()],
+            "selected_columns": selected,
+            "headers": [columns[key][0] for key in selected],
+            "rows": rows,
+            "statuses": License.Status.choices,
+            "selected_status": status,
+            "manufacturers": Party.objects.filter(kind=Party.Kind.MANUFACTURER),
+            "distributors": Party.objects.filter(kind=Party.Kind.DISTRIBUTOR),
+            "selected_manufacturer": manufacturer,
+            "selected_distributor": distributor,
+            "selected_organization": organization,
+        },
     )
