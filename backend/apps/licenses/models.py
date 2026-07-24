@@ -58,6 +58,7 @@ class License(models.Model):
         TERMINATED = "TERMINATED", "Megszüntetett"
         ARCHIVED = "ARCHIVED", "Archivált"
 
+    reference_code = models.CharField(max_length=50, blank=True, db_index=True)
     name = models.CharField(max_length=255)
     manufacturer = models.ForeignKey(
         Party,
@@ -76,6 +77,8 @@ class License(models.Model):
         limit_choices_to={"kind": Party.Kind.DISTRIBUTOR},
     )
     quantity = models.PositiveIntegerField(default=1, validators=[MinValueValidator(1)])
+    used_quantity = models.PositiveIntegerField(default=0, blank=True)
+    organization = models.CharField(max_length=200, blank=True)
     deployment_mode = models.CharField(max_length=20, choices=Deployment.choices)
     concurrent = models.BooleanField(default=False)
     concurrent_limit = models.PositiveIntegerField(
@@ -129,6 +132,10 @@ class License(models.Model):
         ]
 
     def clean(self):
+        if self.used_quantity > self.quantity:
+            raise ValidationError(
+                {"used_quantity": "A felhasznalt mennyiseg nem lehet nagyobb az osszes mennyisegnel."}
+            )
         if self.concurrent and not self.concurrent_limit:
             raise ValidationError({"concurrent_limit": "Konkurens licencnél a limit kötelező."})
         if not self.concurrent:

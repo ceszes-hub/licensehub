@@ -1,6 +1,7 @@
 import csv
 
 from django.contrib.auth.decorators import login_required, permission_required
+from django.core.paginator import Paginator
 from django.db.models import Count, Q, Sum
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -17,23 +18,49 @@ def license_list(request):
     items = License.objects.select_related("manufacturer", "distributor", "owner")
     query = request.GET.get("q", "").strip()
     status = request.GET.get("status", "")
+    manufacturer = request.GET.get("manufacturer", "")
+    organization = request.GET.get("organization", "").strip()
     if query:
         items = items.filter(
-            Q(name__icontains=query)
+            Q(reference_code__icontains=query)
+            | Q(name__icontains=query)
             | Q(manufacturer__name__icontains=query)
             | Q(distributor__name__icontains=query)
+            | Q(organization__icontains=query)
             | Q(cost_center__icontains=query)
         )
     if status:
         items = items.filter(status=status)
+    if manufacturer:
+        items = items.filter(manufacturer_id=manufacturer)
+    if organization:
+        items = items.filter(organization=organization)
+    all_items = License.objects.all()
+    totals = all_items.aggregate(total_quantity=Sum("quantity"), total_value=Sum("cost"))
+    status_counts = dict(all_items.values_list("status").annotate(total=Count("id")))
+    page_obj = Paginator(items, 20).get_page(request.GET.get("page"))
     return render(
         request,
         "licenses/list.html",
         {
-            "licenses": items,
+            "licenses": page_obj,
+            "page_obj": page_obj,
             "query": query,
             "selected_status": status,
+            "selected_manufacturer": manufacturer,
+            "selected_organization": organization,
             "statuses": License.Status.choices,
+            "manufacturers": Party.objects.filter(kind=Party.Kind.MANUFACTURER, active=True),
+            "organizations": all_items.exclude(organization="")
+            .values_list("organization", flat=True)
+            .distinct()
+            .order_by("organization"),
+            "total_licenses": all_items.count(),
+            "total_quantity": totals["total_quantity"] or 0,
+            "total_value": totals["total_value"] or 0,
+            "active_count": status_counts.get(License.Status.ACTIVE, 0),
+            "expiring_count": status_counts.get(License.Status.EXPIRING, 0),
+            "expired_count": status_counts.get(License.Status.EXPIRED, 0),
         },
     )
 
@@ -200,10 +227,13 @@ def license_export(request):
     writer = csv.writer(response)
     writer.writerow(
         [
+            "Licencazonosító",
             "Elnevezés",
             "Gyártó",
             "Disztribútor",
+            "Szervezet",
             "Darabszám",
+            "Felhasznált darabszám",
             "Státusz",
             "Lejárat",
             "Költség",
@@ -213,10 +243,13 @@ def license_export(request):
     for obj in License.objects.select_related("manufacturer", "distributor"):
         writer.writerow(
             [
+                obj.reference_code or f"LH-{obj.pk:05d}",
                 obj.name,
                 obj.manufacturer or "",
                 obj.distributor or "",
+                obj.organization,
                 obj.quantity,
+                obj.used_quantity,
                 obj.get_status_display(),
                 obj.expires_at or "",
                 obj.cost or "",

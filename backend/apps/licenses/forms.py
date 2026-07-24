@@ -30,10 +30,13 @@ class LicenseForm(forms.ModelForm):
             "updated_at",
         ]
         labels = {
+            "reference_code": "Licencazonosító",
             "name": "Elnevezés",
             "manufacturer": "Gyártó",
             "distributor": "Disztribútor",
             "quantity": "Darabszám",
+            "used_quantity": "Felhasznált darabszám",
+            "organization": "Szervezet",
             "deployment_mode": "Telepítési mód",
             "concurrent": "Konkurens használatú",
             "concurrent_limit": "Konkurens használati limit",
